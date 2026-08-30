@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Allenamento Istologia (86 Vetrini)</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { display: flex; height: 100vh; background-color: #1e1e1e; color: #fff; }
+
+        .left-pane { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; border-right: 2px solid #333; padding: 20px; position: relative; }
+        .left-pane img { max-width: 100%; max-height: 85%; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .progress { position: absolute; top: 20px; left: 20px; font-size: 0.85em; color: #999; }
+        .stats-mini { position: absolute; top: 20px; right: 20px; font-size: 0.85em; color: #999; text-align: right; }
+
+        .right-pane { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px; position: relative; }
+
+        #eye-toggle { font-size: 64px; cursor: pointer; transition: transform 0.2s; background: none; border: none; }
+        #eye-toggle:hover { transform: scale(1.1); }
+        #eye-hint { color: #888; margin-top: 15px; font-size: 0.95em; }
+
+        #flashcard { display: none; background: #2d2d2d; padding: 30px; border-radius: 12px; width: 90%; max-width: 620px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); max-height: 78vh; overflow-y: auto; }
+        #flashcard.visible { display: block; }
+
+        h2 { margin-bottom: 15px; color: #4DA8DA; font-size: 1.4em; }
+        .tag { background: #444; padding: 5px 10px; border-radius: 4px; font-size: 0.8em; display: inline-block; margin-bottom: 20px; }
+        .section-label { color: #4DA8DA; font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; margin-top: 18px; }
+        ul { margin-left: 20px; line-height: 1.6; font-size: 0.92em; }
+
+        .theory-box { margin-top: 8px; }
+        #slide-theory { font-size: 0.87em; color: #ccc; line-height: 1.6; text-align: justify; }
+
+        .controls { position: absolute; bottom: 30px; display: flex; gap: 15px; flex-wrap: wrap; justify-content: center; }
+        button { padding: 10px 20px; font-size: 16px; cursor: pointer; color: white; border: none; border-radius: 6px; }
+        .btn-skip { background: #555; } .btn-skip:hover { background: #666; }
+        .eval-controls { display: none; gap: 20px; }
+        .btn-right { background: #2E7D32; } .btn-right:hover { background: #388E3C; }
+        .btn-wrong { background: #C62828; } .btn-wrong:hover { background: #D32F2F; }
+        .btn-reset { background: #333; font-size: 12px; padding: 6px 12px; }
+
+        @media (max-width: 800px) {
+            body { flex-direction: column; }
+            .left-pane { border-right: none; border-bottom: 2px solid #333; height: 45%; }
+            .right-pane { height: 55%; padding: 20px; }
+            #flashcard { max-height: 55vh; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="left-pane">
+        <div class="progress" id="progress-label"></div>
+        <div class="stats-mini" id="stats-mini"></div>
+        <img id="slide-img" src="" alt="Vetrino Istologico">
+    </div>
+
+    <div class="right-pane">
+        <button id="eye-toggle">&#128065;&#65039;</button>
+        <div id="eye-hint">Clicca l'occhio per rivelare la flashcard</div>
+
+        <div id="flashcard">
+            <h2 id="slide-title">Titolo</h2>
+            <div class="tag" id="slide-stain">Colorazione</div>
+
+            <div class="section-label">Caratteristiche chiave</div>
+            <ul id="slide-features"></ul>
+
+            <div class="section-label">Teoria</div>
+            <div class="theory-box">
+                <p id="slide-theory"></p>
+            </div>
+        </div>
+
+        <div class="controls" id="default-controls">
+            <button class="btn-skip" onclick="caricaNuovoVetrino()">Salta Vetrino &#9197;</button>
+            <button class="btn-reset" onclick="resetStats()">Reset statistiche</button>
+        </div>
+
+        <div class="controls eval-controls" id="eval-controls">
+            <button class="btn-wrong" onclick="valuta(false)">&#10060; Non lo sapevo</button>
+            <button class="btn-right" onclick="valuta(true)">&#9989; Lo sapevo</button>
+        </div>
+    </div>
+
+    <script src="data.js"></script>
+    <script>
+        const eyeToggle = document.getElementById('eye-toggle');
+        const eyeHint = document.getElementById('eye-hint');
+        const flashcard = document.getElementById('flashcard');
+        const evalControls = document.getElementById('eval-controls');
+        const defaultControls = document.getElementById('default-controls');
+        const progressLabel = document.getElementById('progress-label');
+        const statsMini = document.getElementById('stats-mini');
+
+        let vetrinoAttuale = null;
+        let stats = JSON.parse(localStorage.getItem('istologia_stats_v2')) || {};
+
+        vetrini.forEach(v => {
+            if (!stats[v.id]) {
+                stats[v.id] = { peso: 5, visti: 0, corretti: 0, errati: 0 };
+            }
+        });
+
+        function salvaStats() {
+            localStorage.setItem('istologia_stats_v2', JSON.stringify(stats));
+        }
+
+        function resetStats() {
+            if (confirm('Vuoi davvero azzerare tutte le statistiche e i pesi?')) {
+                localStorage.removeItem('istologia_stats_v2');
+                stats = {};
+                vetrini.forEach(v => { stats[v.id] = { peso: 5, visti: 0, corretti: 0, errati: 0 }; });
+                salvaStats();
+                caricaNuovoVetrino();
+            }
+        }
+
+        // Estrazione randomica pesata: imprevedibile ma privilegia i vetrini sbagliati più spesso
+        function scegliVetrinoPonderato() {
+            let sommaPesi = 0;
+            vetrini.forEach(v => { sommaPesi += stats[v.id].peso; });
+
+            let random = Math.random() * sommaPesi;
+            for (let i = 0; i < vetrini.length; i++) {
+                random -= stats[vetrini[i].id].peso;
+                if (random <= 0) return vetrini[i];
+            }
+            return vetrini[Math.floor(Math.random() * vetrini.length)];
+        }
+
+        eyeToggle.addEventListener('click', () => {
+            flashcard.classList.add('visible');
+            eyeToggle.style.display = 'none';
+            eyeHint.style.display = 'none';
+            defaultControls.style.display = 'none';
+            evalControls.style.display = 'flex';
+        });
+
+        function aggiornaStatsMini() {
+            let totVisti = 0, totCorretti = 0, totErrati = 0;
+            vetrini.forEach(v => {
+                totVisti += stats[v.id].visti;
+                totCorretti += stats[v.id].corretti;
+                totErrati += stats[v.id].errati;
+            });
+            statsMini.innerHTML = `Visti: ${totVisti}<br>Corretti: ${totCorretti} | Errati: ${totErrati}`;
+        }
+
+        function caricaNuovoVetrino() {
+            flashcard.classList.remove('visible');
+            eyeToggle.style.display = 'block';
+            eyeHint.style.display = 'block';
+            evalControls.style.display = 'none';
+            defaultControls.style.display = 'flex';
+
+            vetrinoAttuale = scegliVetrinoPonderato();
+            stats[vetrinoAttuale.id].visti++;
+            salvaStats();
+
+            document.getElementById('slide-img').src = vetrinoAttuale.immagine;
+            document.getElementById('slide-title').innerText = vetrinoAttuale.titolo;
+            document.getElementById('slide-stain').innerText = vetrinoAttuale.colorazione;
+            document.getElementById('slide-theory').innerText = vetrinoAttuale.teoria;
+
+            const ulElement = document.getElementById('slide-features');
+            ulElement.innerHTML = '';
+            vetrinoAttuale.caratteristiche.forEach(c => {
+                const li = document.createElement('li');
+                li.innerText = c;
+                ulElement.appendChild(li);
+            });
+
+            progressLabel.innerText = `Vetrini totali: ${vetrini.length}`;
+            aggiornaStatsMini();
+        }
+
+        function valuta(corretto) {
+            let s = stats[vetrinoAttuale.id];
+            if (corretto) {
+                s.corretti++;
+                s.peso = Math.max(1, s.peso - 2);
+            } else {
+                s.errati++;
+                s.peso += 5;
+            }
+            salvaStats();
+            caricaNuovoVetrino();
+        }
+
+        window.onload = caricaNuovoVetrino;
+    </script>
+</body>
+</html>
